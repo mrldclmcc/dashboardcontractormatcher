@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contractor Matching Tool</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- SheetJS for Excel and CSV Processing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* Custom Scrollbar for the table container */
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <svg class="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                <h1 class="text-xl font-semibold text-slate-900">Contractor Reconciliation Tool</h1>
+            </div>
+            <div class="text-sm font-medium text-slate-500">
+                Match CSV/Excel to Dashboard List of Contractors
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- Step Indicators -->
+        <div class="mb-8">
+            <div class="flex items-center justify-center space-x-4">
+                <div id="step-nav-1" class="flex items-center text-brand-600 font-semibold">
+                    <span class="h-8 w-8 rounded-full border-2 border-brand-600 flex items-center justify-center mr-2">1</span>
+                    Upload Data
+                </div>
+                <div class="h-px w-16 bg-slate-200"></div>
+                <div id="step-nav-2" class="flex items-center text-slate-400 font-medium">
+                    <span class="h-8 w-8 rounded-full border-2 border-slate-300 flex items-center justify-center mr-2">2</span>
+                    Map Column
+                </div>
+                <div class="h-px w-16 bg-slate-200"></div>
+                <div id="step-nav-3" class="flex items-center text-slate-400 font-medium">
+                    <span class="h-8 w-8 rounded-full border-2 border-slate-300 flex items-center justify-center mr-2">3</span>
+                    Review Matches
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Message / Alert Box -->
+        <div id="alert-box" class="hidden mb-6 rounded-md p-4 bg-red-50 border border-red-200 fade-in">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800" id="alert-title">Error</h3>
+                    <div class="mt-2 text-sm text-red-700" id="alert-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 1: UPLOAD FILES -->
+        <div id="step-1" class="bg-white shadow-sm border border-slate-200 rounded-xl p-8 fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <!-- Target File Upload -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">1. Target Data (CSV/Excel)</label>
+                    <p class="text-xs text-slate-500 mb-4">Upload the file containing the list of contractors you want to match.</p>
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-lg hover:border-brand-500 transition-colors bg-slate-50 relative">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="flex text-sm text-slate-600 justify-center">
+                                <label for="target-file" class="relative cursor-pointer rounded-md font-medium text-brand-600 hover:text-brand-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-brand-500">
+                                    <span>Upload a file</span>
+                                    <input id="target-file" name="target-file" type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" class="sr-only">
+                                </label>
+                            </div>
+                            <p class="text-xs text-slate-500">CSV, XLS, XLSX up to 50MB</p>
+                        </div>
+                    </div>
+                    <div id="target-file-status" class="mt-2 text-sm text-brand-600 font-medium hidden flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span id="target-file-name">Loaded</span>
+                    </div>
+                </div>
+
+                <!-- Reference File Upload -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">2. Reference Data (JSON)</label>
+                    <p class="text-xs text-slate-500 mb-4">Upload the JSON file containing the master list of contractors.</p>
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-lg hover:border-brand-500 transition-colors bg-slate-50 relative">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M12 14l9-5 9 5v10l-9 5-9-5V14z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M12 14l9 5 9-5M21 19v10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="flex text-sm text-slate-600 justify-center">
+                                <label for="reference-file" class="relative cursor-pointer rounded-md font-medium text-brand-600 hover:text-brand-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-brand-500">
+                                    <span>Upload JSON</span>
+                                    <input id="reference-file" name="reference-file" type="file" accept=".json" class="sr-only">
+                                </label>
+                            </div>
+                            <p class="text-xs text-slate-500">JSON format required</p>
+                        </div>
+                    </div>
+                    <div id="reference-file-status" class="mt-2 text-sm text-brand-600 font-medium hidden flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span id="reference-file-name">Loaded</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button id="btn-next-step1" class="bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition-colors opacity-50 cursor-not-allowed" disabled>
+                    Proceed to Column Mapping
+                </button>
+            </div>
+        </div>
+
+        <!-- STEP 2: SELECT COLUMN -->
+        <div id="step-2" class="hidden bg-white shadow-sm border border-slate-200 rounded-xl p-8 fade-in">
+            <h2 class="text-lg font-semibold text-slate-800 mb-2">Map Contractor Column</h2>
+            <p class="text-sm text-slate-600 mb-6">Select the column from your Target Data that contains the contractor names you wish to match.</p>
+
+            <div class="max-w-md space-y-4">
+                <div>
+                    <label for="column-select" class="block text-sm font-medium text-slate-700 mb-1">Contractor Name Column</label>
+                    <select id="column-select" class="mt-1 block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm rounded-md border shadow-sm bg-white">
+                        <option value="">-- Select a column --</option>
+                        <!-- Options populated via JS -->
+                    </select>
+                </div>
+
+                <!-- Smart Industry Filter Option -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                        <input type="checkbox" id="chk-smart-matching" checked class="mt-0.5 h-4 w-4 text-brand-600 focus:ring-brand-500 border-slate-300 rounded">
+                        <span class="text-xs text-slate-700">
+                            <strong class="font-semibold block text-slate-800">Smart Industry-Aware Matching</strong>
+                            Filters out generic noise words (e.g., <em>"Construction", "Concrete", "Asphalt", "Inc", "LLC"</em>) so core company names (like <em>"Martam"</em> or <em>"Dunnet Bay"</em>) match accurately.
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mt-10 flex items-center justify-between">
+                <button id="btn-back-step2" class="text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors">
+                    &larr; Back to Upload
+                </button>
+                <button id="btn-next-step2" class="bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition-colors flex items-center opacity-50 cursor-not-allowed" disabled>
+                    <span>Run Match Analysis</span>
+                    <svg id="processing-spinner" class="animate-spin ml-2 h-4 w-4 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- STEP 3: REVIEW MATCHES & EXPORT -->
+        <div id="step-3" class="hidden bg-white shadow-sm border border-slate-200 rounded-xl flex flex-col fade-in h-[800px] max-h-[85vh]">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-800">Review & Refine Matches</h2>
+                    <p class="text-sm text-slate-500 mt-1">Review top 5 closest matches for <span id="unique-count-label" class="font-bold text-slate-700">0</span> unique contractors. Use the search icon to manually query the master JSON list.</p>
+                </div>
+                <div class="flex gap-4">
+                    <button id="btn-back-step3" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-colors">
+                        Back
+                    </button>
+                    <button id="btn-export" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Export Final Data
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-auto table-container">
+                <table class="min-w-full divide-y divide-slate-200 border-b border-slate-200">
+                    <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-5/12 border-b border-slate-200">
+                                Original Target Contractor
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-6/12 border-b border-slate-200">
+                                Best JSON Reference Match
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-1/12 border-b border-slate-200 text-center">
+                                Match Score
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="match-table-body" class="bg-white divide-y divide-slate-100">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MANUAL SEARCH MODAL -->
+    <div id="search-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-2xl w-full flex flex-col max-h-[85vh] fade-in">
+            <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <div>
+                    <h3 class="font-semibold text-slate-800 text-base">Search Reference Contractors</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Searching match for: <strong id="modal-target-name" class="text-slate-700"></strong></p>
+                </div>
+                <button id="modal-close-btn" class="text-slate-400 hover:text-slate-600 text-lg p-1 rounded-md transition-colors">&times;</button>
+            </div>
+            <div class="p-5 border-b border-slate-200">
+                <div class="relative">
+                    <input type="text" id="modal-search-input" placeholder="Type contractor name or keywords (e.g. 'M Y S' or 'Paschen')..." class="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    <svg class="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+            <div class="flex-grow overflow-auto p-3 divide-y divide-slate-100 min-h-[250px]" id="modal-results-list">
+                <!-- Search results injected here -->
+            </div>
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500 rounded-b-xl">
+                <span id="modal-results-count">Type above to search...</span>
+                <button id="btn-cancel-modal" class="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-medium hover:bg-slate-100">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Variables ---
+        let inputData = []; // Array of objects from Target CSV/Excel
+        let inputHeaders = []; // Headers of Target Data
+        let referenceData = []; // Array of objects from Reference JSON
+        let parsedReferenceData = []; // Pre-parsed contractor token objects
+        let uniqueTargetNames = []; // Array of unique strings from chosen column
+        let matchingDictionary = {}; // Map: OriginalName -> { top5: Array, selected: String, score: Number }
+        let selectedColumn = "";
+        let activeModalTargetName = ""; // Current target name being edited in modal
+
+        // --- DOM Elements ---
+        const elTargetFile = document.getElementById('target-file');
+        const elTargetStatus = document.getElementById('target-file-status');
+        const elTargetName = document.getElementById('target-file-name');
+
+        const elReferenceFile = document.getElementById('reference-file');
+        const elReferenceStatus = document.getElementById('reference-file-status');
+        const elReferenceName = document.getElementById('reference-file-name');
+
+        const btnNextStep1 = document.getElementById('btn-next-step1');
+        const btnNextStep2 = document.getElementById('btn-next-step2');
+        const btnBackStep2 = document.getElementById('btn-back-step2');
+        const btnBackStep3 = document.getElementById('btn-back-step3');
+        const btnExport = document.getElementById('btn-export');
+
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const step3 = document.getElementById('step-3');
+
+        const nav1 = document.getElementById('step-nav-1');
+        const nav2 = document.getElementById('step-nav-2');
+        const nav3 = document.getElementById('step-nav-3');
+
+        const colSelect = document.getElementById('column-select');
+        const matchTableBody = document.getElementById('match-table-body');
+
+        const alertBox = document.getElementById('alert-box');
+        const alertTitle = document.getElementById('alert-title');
+        const alertMessage = document.getElementById('alert-message');
+        const spinner = document.getElementById('processing-spinner');
+        const countLabel = document.getElementById('unique-count-label');
+
+        // Modal DOM Elements
+        const searchModal = document.getElementById('search-modal');
+        const modalTargetNameEl = document.getElementById('modal-target-name');
+        const modalSearchInput = document.getElementById('modal-search-input');
+        const modalResultsList = document.getElementById('modal-results-list');
+        const modalResultsCount = document.getElementById('modal-results-count');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const btnCancelModal = document.getElementById('btn-cancel-modal');
+
+        // --- Utility Functions ---
+
+        function showAlert(title, message) {
+            alertTitle.textContent = title;
+            alertMessage.textContent = message;
+            alertBox.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideAlert() {
+            alertBox.classList.add('hidden');
+        }
+
+        function changeStep(from, to) {
+            hideAlert();
+            document.getElementById(`step-${from}`).classList.add('hidden');
+            document.getElementById(`step-${to}`).classList.remove('hidden');
+
+            // Update Navigation UI
+            const updateNav = (navEl, isActive) => {
+                const circle = navEl.querySelector('span');
+                if (isActive) {
+                    navEl.classList.add('text-brand-600', 'font-semibold');
+                    navEl.classList.remove('text-slate-400', 'font-medium');
+                    circle.classList.add('border-brand-600');
+                    circle.classList.remove('border-slate-300');
+                } else {
+                    navEl.classList.remove('text-brand-600', 'font-semibold');
+                    navEl.classList.add('text-slate-400', 'font-medium');
+                    circle.classList.remove('border-brand-600');
+                    circle.classList.add('border-slate-300');
+                }
+            };
+
+            if (to === 1) { updateNav(nav1, true); updateNav(nav2, false); updateNav(nav3, false); }
+            if (to === 2) { updateNav(nav1, false); updateNav(nav2, true); updateNav(nav3, false); }
+            if (to === 3) { updateNav(nav1, false); updateNav(nav2, false); updateNav(nav3, true); }
+        }
+
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') return "";
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        // Legal suffixes to strip/discount
+        const LEGAL_SUFFIXES = new Set([
+            'inc', 'incorporated', 'llc', 'corp', 'corporation', 'co', 'company',
+            'ltd', 'limited', 'lp', 'llp', 'pllc', 'dba', 'group', 'plc', 'pc',
+            'holdings', 'holding', 'enterprises', 'enterprise', 'partners'
+        ]);
+
+        // Generic industry terms to discount when scoring core company identity
+        const GENERIC_INDUSTRY_WORDS = new Set([
+            'construction', 'contractor', 'contractors', 'contracting', 'concrete',
+            'asphalt', 'paving', 'pave', 'builder', 'builders', 'building', 'buildings',
+            'service', 'services', 'electric', 'electrical', 'plumbing', 'roofing',
+            'engineering', 'engineer', 'engineers', 'excavating', 'excavation',
+            'road', 'roads', 'pavement', 'infrastructure', 'system', 'systems',
+            'solution', 'solutions', 'associate', 'associates', 'bro', 'bros',
+            'brother', 'brothers', 'management', 'industry', 'industries', 'work',
+            'works', 'development', 'equipment', 'rental', 'rentals', 'supply',
+            'supplies', 'utility', 'utilities', 'distributor', 'distributors',
+            'material', 'materials', 'masonry', 'structural', 'civil', 'general',
+            'heavy', 'highway', 'environmental', 'architectural', 'architects'
+        ]);
+
+        // Parse contractor name into core vs generic/legal tokens
+        function parseContractorName(rawName) {
+            if (!rawName || typeof rawName !== 'string') {
+                return { raw: '', normalized: '', allTokens: [], coreTokens: [], genericTokens: [], coreString: '' };
+            }
+
+            const normalized = rawName.toLowerCase()
+                .replace(/&/g, ' and ')
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!normalized) {
+                return { raw: rawName, normalized: '', allTokens: [], coreTokens: [], genericTokens: [], coreString: '' };
+            }
+
+            const allTokens = normalized.split(' ').filter(Boolean);
+            const coreTokens = [];
+            const genericTokens = [];
+
+            allTokens.forEach(token => {
+                if (LEGAL_SUFFIXES.has(token) || GENERIC_INDUSTRY_WORDS.has(token)) {
+                    genericTokens.push(token);
+                } else {
+                    coreTokens.push(token);
+                }
+            });
+
+            return {
+                raw: rawName,
+                normalized: normalized,
+                allTokens: allTokens,
+                coreTokens: coreTokens,
+                genericTokens: genericTokens,
+                coreString: coreTokens.join(' ')
+            };
+        }
+
+        function diceSimilarity(str1, str2) {
+            if (!str1 || !str2) return 0;
+            if (str1 === str2) return 1;
+            if (str1.length < 2 || str2.length < 2) return 0;
+
+            const bigrams = new Map();
+            for (let i = 0; i < str1.length - 1; i++) {
+                const bigram = str1.substring(i, i + 2);
+                bigrams.set(bigram, (bigrams.get(bigram) || 0) + 1);
+            }
+
+            let matches = 0;
+            for (let i = 0; i < str2.length - 1; i++) {
+                const bigram = str2.substring(i, i + 2);
+                const count = bigrams.get(bigram) || 0;
+                if (count > 0) {
+                    bigrams.set(bigram, count - 1);
+                    matches++;
+                }
+            }
+            return (2.0 * matches) / (str1.length + str2.length - 2);
+        }
+
+        // Hybrid Business Entity Matching Algorithm
+        function calculateBusinessMatchScore(targetObj, refObj, useSmartMatching = true) {
+            if (!targetObj.normalized || !refObj.normalized) return 0;
+
+            if (targetObj.normalized === refObj.normalized) return 1.0;
+
+            if (!useSmartMatching) {
+                return diceSimilarity(targetObj.normalized, refObj.normalized);
+            }
+
+            // 1. Core Token Score (55% Weight)
+            let coreScore = 0;
+            const tCoreStr = targetObj.coreString;
+            const rCoreStr = refObj.coreString;
+            const hasCore = targetObj.coreTokens.length > 0 && refObj.coreTokens.length > 0;
+
+            if (hasCore) {
+                if (tCoreStr === rCoreStr) {
+                    coreScore = 1.0;
+                } else if (tCoreStr.includes(rCoreStr) || rCoreStr.includes(tCoreStr)) {
+                    const minLen = Math.min(tCoreStr.length, rCoreStr.length);
+                    const maxLen = Math.max(tCoreStr.length, rCoreStr.length);
+                    coreScore = 0.85 + 0.10 * (minLen / maxLen);
+                } else {
+                    const tSet = new Set(targetObj.coreTokens);
+                    const rSet = new Set(refObj.coreTokens);
+                    let coreIntersect = 0;
+                    tSet.forEach(t => { if (rSet.has(t)) coreIntersect++; });
+                    const jaccardCore = coreIntersect / Math.max(1, (tSet.size + rSet.size - coreIntersect));
+                    const diceCore = diceSimilarity(tCoreStr, rCoreStr);
+                    coreScore = Math.max(jaccardCore, diceCore);
+                }
+            } else {
+                coreScore = diceSimilarity(targetObj.normalized, refObj.normalized);
+            }
+
+            // 2. Weighted Token Jaccard Score (30% Weight)
+            let weightedIntersect = 0;
+            let weightedUnion = 0;
+
+            const rTokenMap = new Map();
+            refObj.allTokens.forEach(tok => {
+                let w = 1.0;
+                if (LEGAL_SUFFIXES.has(tok)) w = 0.05;
+                else if (GENERIC_INDUSTRY_WORDS.has(tok)) w = 0.15;
+                rTokenMap.set(tok, w);
+            });
+
+            const tTokenMap = new Map();
+            targetObj.allTokens.forEach(tok => {
+                let w = 1.0;
+                if (LEGAL_SUFFIXES.has(tok)) w = 0.05;
+                else if (GENERIC_INDUSTRY_WORDS.has(tok)) w = 0.15;
+                tTokenMap.set(tok, w);
+            });
+
+            const allUniqueTokens = new Set([...tTokenMap.keys(), ...rTokenMap.keys()]);
+            allUniqueTokens.forEach(tok => {
+                const inT = tTokenMap.has(tok);
+                const inR = rTokenMap.has(tok);
+                const wT = tTokenMap.get(tok) || 0;
+                const wR = rTokenMap.get(tok) || 0;
+                const weight = Math.max(wT, wR);
+
+                if (inT && inR) {
+                    weightedIntersect += weight;
+                }
+                weightedUnion += weight;
+            });
+
+            const weightedScore = weightedUnion > 0 ? (weightedIntersect / weightedUnion) : 0;
+
+            // 3. Full Character Dice Similarity (15% Weight)
+            const fullDiceScore = diceSimilarity(targetObj.normalized, refObj.normalized);
+
+            // Composite Final Score
+            let finalScore = (0.55 * coreScore) + (0.30 * weightedScore) + (0.15 * fullDiceScore);
+
+            // Core Match Override
+            if (hasCore && tCoreStr === rCoreStr && tCoreStr.length >= 3) {
+                finalScore = Math.max(finalScore, 0.95);
+            }
+
+            // Penalty Rule: If target has core tokens but ZERO core tokens match reference, cap score
+            if (targetObj.coreTokens.length > 0 && refObj.coreTokens.length > 0) {
+                const hasCoreOverlap = targetObj.coreTokens.some(t => refObj.coreTokens.includes(t));
+                if (!hasCoreOverlap) {
+                    const coreDice = diceSimilarity(tCoreStr, rCoreStr);
+                    if (coreDice < 0.6) {
+                        finalScore = Math.min(finalScore, 0.25);
+                    }
+                }
+            }
+
+            return Math.min(1.0, Math.max(0, finalScore));
+        }
+
+        // File Upload Handlers
+        elTargetFile.addEventListener('change', handleTargetUpload);
+        elReferenceFile.addEventListener('change', handleReferenceUpload);
+
+        function checkStep1Completion() {
+            if (inputData.length > 0 && referenceData.length > 0) {
+                btnNextStep1.disabled = false;
+                btnNextStep1.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnNextStep1.disabled = true;
+                btnNextStep1.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function handleTargetUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            hideAlert();
+            elTargetName.textContent = `Reading ${file.name}...`;
+            elTargetStatus.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+
+                    inputData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
+                    inputHeaders = XLSX.utils.sheet_to_json(worksheet, {header: 1})[0] || [];
+
+                    if (inputData.length === 0 || inputHeaders.length === 0) {
+                        throw new Error("The uploaded file appears to be empty or improperly formatted.");
+                    }
+
+                    elTargetName.textContent = `${file.name} loaded (${inputData.length} rows)`;
+                    populateColumnDropdown();
+                    checkStep1Completion();
+
+                } catch (error) {
+                    console.error(error);
+                    elTargetStatus.classList.add('hidden');
+                    inputData = [];
+                    inputHeaders = [];
+                    showAlert("Target File Error", "Failed to parse target file. Ensure it is a valid CSV or Excel document.");
+                    checkStep1Completion();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function handleReferenceUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            hideAlert();
+            elReferenceName.textContent = `Reading ${file.name}...`;
+            elReferenceStatus.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const parsedJSON = JSON.parse(event.target.result);
+                    if (!Array.isArray(parsedJSON)) {
+                        throw new Error("JSON root must be an array.");
+                    }
+
+                    referenceData = parsedJSON.filter(item => item && typeof item.text === 'string');
+
+                    if (referenceData.length === 0) {
+                        throw new Error("No valid contractor entries found in the JSON.");
+                    }
+
+                    parsedReferenceData = referenceData.map(item => ({
+                        originalObj: item,
+                        parsed: parseContractorName(item.text)
+                    }));
+
+                    elReferenceName.textContent = `${file.name} loaded (${referenceData.length} entries)`;
+                    checkStep1Completion();
+
+                } catch (error) {
+                    console.error(error);
+                    elReferenceStatus.classList.add('hidden');
+                    referenceData = [];
+                    parsedReferenceData = [];
+                    showAlert("JSON File Error", "Failed to parse the reference JSON. " + error.message);
+                    checkStep1Completion();
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function populateColumnDropdown() {
+            colSelect.innerHTML = '<option value="">-- Select a column --</option>';
+            inputHeaders.forEach(header => {
+                if (header) {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    colSelect.appendChild(option);
+                }
+            });
+        }
+
+        btnNextStep1.addEventListener('click', () => { changeStep(1, 2); });
+        btnBackStep2.addEventListener('click', () => { changeStep(2, 1); });
+        btnBackStep3.addEventListener('click', () => { changeStep(3, 2); });
+
+        colSelect.addEventListener('change', (e) => {
+            selectedColumn = e.target.value;
+            if (selectedColumn) {
+                btnNextStep2.disabled = false;
+                btnNextStep2.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnNextStep2.disabled = true;
+                btnNextStep2.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        btnNextStep2.addEventListener('click', () => {
+            btnNextStep2.disabled = true;
+            spinner.classList.remove('hidden');
+            hideAlert();
+
+            setTimeout(() => {
+                try {
+                    processMatches();
+                    changeStep(2, 3);
+                } catch(error) {
+                    console.error(error);
+                    showAlert("Matching Error", "An error occurred during matching calculation.");
+                } finally {
+                    btnNextStep2.disabled = false;
+                    spinner.classList.add('hidden');
+                }
+            }, 50);
+        });
+
+        function processMatches() {
+            const rawNames = inputData.map(row => row[selectedColumn]);
+            const uniqueSet = new Set(rawNames.filter(val => val !== null && val !== undefined && String(val).trim() !== ""));
+            uniqueTargetNames = Array.from(uniqueSet).sort();
+
+            countLabel.textContent = uniqueTargetNames.length;
+            matchingDictionary = {};
+
+            const chkSmart = document.getElementById('chk-smart-matching');
+            const useSmartMatching = chkSmart ? chkSmart.checked : true;
+
+            uniqueTargetNames.forEach(originalName => {
+                const parsedTarget = parseContractorName(String(originalName));
+
+                if (!parsedTarget.normalized) {
+                    matchingDictionary[originalName] = { top5: [], selected: "", score: 0 };
+                    return;
+                }
+
+                const scoredItems = parsedReferenceData.map(ref => {
+                    return {
+                        originalObj: ref.originalObj,
+                        score: calculateBusinessMatchScore(parsedTarget, ref.parsed, useSmartMatching)
+                    };
+                });
+
+                scoredItems.sort((a, b) => b.score - a.score);
+                const top5 = scoredItems.slice(0, 5);
+
+                const bestMatch = top5.length > 0 ? top5[0] : null;
+                const defaultSelected = (bestMatch && bestMatch.score >= 0.25) ? bestMatch.originalObj.text : "";
+
+                matchingDictionary[originalName] = {
+                    top5: top5,
+                    selected: defaultSelected,
+                    score: bestMatch ? bestMatch.score : 0
+                };
+            });
+
+            renderMatchTable();
+        }
+
+        function renderMatchTable() {
+            matchTableBody.innerHTML = '';
+
+            uniqueTargetNames.forEach(originalName => {
+                const matchData = matchingDictionary[originalName];
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors group";
+
+                // Column 1: Original Name
+                const tdOriginal = document.createElement('td');
+                tdOriginal.className = "px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-medium truncate max-w-[280px]";
+                tdOriginal.title = originalName;
+                tdOriginal.textContent = originalName;
+                tr.appendChild(tdOriginal);
+
+                // Column 2: Selection Dropdown + Manual Search Button
+                const tdSelect = document.createElement('td');
+                tdSelect.className = "px-6 py-4 text-sm";
+
+                const flexWrapper = document.createElement('div');
+                flexWrapper.className = "flex items-center gap-2";
+
+                const selectEl = document.createElement('select');
+                selectEl.className = "w-full border-slate-300 rounded-md shadow-sm focus:ring-brand-500 focus:border-brand-500 sm:text-sm py-2 px-3 border bg-white cursor-pointer";
+                selectEl.dataset.targetName = originalName;
+
+                populateSelectOptions(selectEl, matchData);
+
+                // Search Override Button
+                const searchBtn = document.createElement('button');
+                searchBtn.type = "button";
+                searchBtn.className = "p-2 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 text-slate-600 border border-slate-300 rounded-md transition-colors shadow-sm flex-shrink-0";
+                searchBtn.title = "Search Master JSON List";
+                searchBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>`;
+                searchBtn.addEventListener('click', () => openSearchModal(originalName));
+
+                flexWrapper.appendChild(selectEl);
+                flexWrapper.appendChild(searchBtn);
+                tdSelect.appendChild(flexWrapper);
+                tr.appendChild(tdSelect);
+
+                // Column 3: Score Badge
+                const tdBadge = document.createElement('td');
+                tdBadge.className = "px-6 py-4 whitespace-nowrap text-center";
+                const badgeEl = document.createElement('span');
+                tdBadge.appendChild(badgeEl);
+                tr.appendChild(tdBadge);
+
+                updateBadgeDisplay(badgeEl, matchData.score, matchData.selected);
+
+                selectEl.addEventListener('change', (e) => {
+                    const newValue = e.target.value;
+                    matchingDictionary[originalName].selected = newValue;
+
+                    let newScore = 0;
+                    if (newValue !== "") {
+                        const matchedItem = matchData.top5.find(m => m.originalObj.text === newValue);
+                        if (matchedItem) {
+                            newScore = matchedItem.score;
+                        } else {
+                            // If selected from custom search, calculate its score
+                            const refMatch = parsedReferenceData.find(r => r.originalObj.text === newValue);
+                            if (refMatch) {
+                                const parsedTarget = parseContractorName(originalName);
+                                newScore = calculateBusinessMatchScore(parsedTarget, refMatch.parsed, true);
+                            } else {
+                                newScore = 1.0;
+                            }
+                        }
+                    }
+                    matchingDictionary[originalName].score = newScore;
+                    updateBadgeDisplay(badgeEl, newScore, newValue);
+                });
+
+                matchTableBody.appendChild(tr);
+            });
+        }
+
+        function populateSelectOptions(selectEl, matchData) {
+            selectEl.innerHTML = '';
+
+            // Check if selected value exists in top 5 list
+            const isCustomSelection = matchData.selected && !matchData.top5.some(m => m.originalObj.text === matchData.selected);
+
+            if (isCustomSelection) {
+                const customOpt = document.createElement('option');
+                customOpt.value = matchData.selected;
+                customOpt.textContent = `[Manual Choice] ${matchData.selected}`;
+                customOpt.selected = true;
+                selectEl.appendChild(customOpt);
+            }
+
+            matchData.top5.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.originalObj.text;
+                const percentage = (m.score * 100).toFixed(1) + "%";
+                option.textContent = `[${percentage}] ${m.originalObj.text}`;
+
+                if (m.originalObj.text === matchData.selected) {
+                    option.selected = true;
+                }
+                selectEl.appendChild(option);
+            });
+
+            const noMatchOption = document.createElement('option');
+            noMatchOption.value = "";
+            noMatchOption.textContent = "-- No Match (Leave Blank) --";
+            if (matchData.selected === "") noMatchOption.selected = true;
+            selectEl.appendChild(noMatchOption);
+        }
+
+        function updateBadgeDisplay(element, score, selectedText) {
+            element.className = "px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full";
+            if (!selectedText || selectedText === "") {
+                element.textContent = "None";
+                element.classList.add("bg-slate-100", "text-slate-500");
+                return;
+            }
+
+            const pct = (score * 100).toFixed(0);
+            element.textContent = `${pct}% Match`;
+
+            element.classList.remove("bg-green-100", "text-green-800", "bg-yellow-100", "text-yellow-800", "bg-red-100", "text-red-800", "bg-slate-100", "text-slate-500");
+
+            if (score >= 0.8) {
+                element.classList.add("bg-green-100", "text-green-800");
+            } else if (score >= 0.5) {
+                element.classList.add("bg-yellow-100", "text-yellow-800");
+            } else {
+                element.classList.add("bg-red-100", "text-red-800");
+            }
+        }
+
+        // --- MANUAL SEARCH MODAL LOGIC ---
+
+        function openSearchModal(targetName) {
+            activeModalTargetName = targetName;
+            modalTargetNameEl.textContent = targetName;
+
+            // Pre-fill query with core part of target name for user convenience
+            const parsedTarget = parseContractorName(targetName);
+            modalSearchInput.value = parsedTarget.coreString || targetName;
+
+            searchModal.classList.remove('hidden');
+            modalSearchInput.focus();
+
+            performModalSearch();
+        }
+
+        function closeSearchModal() {
+            searchModal.classList.add('hidden');
+            activeModalTargetName = "";
+        }
+
+        modalCloseBtn.addEventListener('click', closeSearchModal);
+        btnCancelModal.addEventListener('click', closeSearchModal);
+
+        modalSearchInput.addEventListener('input', performModalSearch);
+
+        function performModalSearch() {
+            const rawQuery = modalSearchInput.value.trim();
+            modalResultsList.innerHTML = '';
+
+            if (!rawQuery) {
+                modalResultsCount.textContent = "Type above to search master list...";
+                return;
+            }
+
+            const cleanQuery = rawQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const queryWords = rawQuery.toLowerCase().split(/\s+/).filter(Boolean);
+
+            // Filter reference contractors matching query
+            const matches = parsedReferenceData.filter(ref => {
+                const textNorm = ref.parsed.normalized;
+                const textClean = textNorm.replace(/[^a-z0-9]/g, '');
+
+                // Flexible matching: check clean substring OR all individual words matching
+                if (textClean.includes(cleanQuery)) return true;
+                return queryWords.every(w => textNorm.includes(w));
+            });
+
+            modalResultsCount.textContent = `Found ${matches.length} matching contractor(s)`;
+
+            if (matches.length === 0) {
+                modalResultsList.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">No matching contractors found in the JSON reference list.</div>`;
+                return;
+            }
+
+            // Display top 50 results
+            matches.slice(0, 50).forEach(item => {
+                const div = document.createElement('div');
+                div.className = "p-3 hover:bg-brand-50 cursor-pointer rounded-lg transition-colors flex justify-between items-center group";
+
+                div.innerHTML = `
+                    <span class="text-sm font-medium text-slate-800 group-hover:text-brand-700">${escapeHtml(item.originalObj.text)}</span>
+                    <button class="px-2.5 py-1 bg-brand-600 text-white text-xs font-semibold rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">Select</button>
+                `;
+
+                div.addEventListener('click', () => applyModalSelection(item.originalObj.text));
+                modalResultsList.appendChild(div);
+            });
+        }
+
+        function applyModalSelection(selectedText) {
+            if (!activeModalTargetName) return;
+
+            const matchData = matchingDictionary[activeModalTargetName];
+            matchData.selected = selectedText;
+
+            // Recalculate score for selected match
+            const refMatch = parsedReferenceData.find(r => r.originalObj.text === selectedText);
+            if (refMatch) {
+                const parsedTarget = parseContractorName(activeModalTargetName);
+                matchData.score = calculateBusinessMatchScore(parsedTarget, refMatch.parsed, true);
+            } else {
+                matchData.score = 1.0;
+            }
+
+            // Update Select Element in table UI
+            const selectEl = matchTableBody.querySelector(`select[data-target-name="${CSS.escape(activeModalTargetName)}"]`);
+            if (selectEl) {
+                populateSelectOptions(selectEl, matchData);
+                const tr = selectEl.closest('tr');
+                const badgeEl = tr.querySelector('span.rounded-full');
+                if (badgeEl) {
+                    updateBadgeDisplay(badgeEl, matchData.score, selectedText);
+                }
+            }
+
+            closeSearchModal();
+        }
+
+        // Export Output Handler
+        btnExport.addEventListener('click', () => {
+            try {
+                const exportData = inputData.map(row => {
+                    const rawVal = row[selectedColumn];
+                    let matchedContractorText = "";
+
+                    if (rawVal !== null && rawVal !== undefined && String(rawVal).trim() !== "") {
+                        const originalNameStr = String(rawVal);
+                        if (matchingDictionary[originalNameStr]) {
+                            matchedContractorText = matchingDictionary[originalNameStr].selected;
+                        }
+                    }
+
+                    return {
+                        ...row,
+                        "Matched JSON Contractor": matchedContractorText
+                    };
+                });
+
+                const newSheet = XLSX.utils.json_to_sheet(exportData);
+                const newWorkbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Matched Output");
+
+                XLSX.writeFile(newWorkbook, "Contractors_Matched_Output.xlsx");
+
+            } catch (error) {
+                console.error(error);
+                showAlert("Export Error", "Failed to generate export file. Please try again.");
+            }
+        });
+
+    </script>
+</body>
+</html>
